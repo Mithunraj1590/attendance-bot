@@ -54,15 +54,16 @@ git push -u origin main
 
 ---
 
-### Step 4: Adjust Your Working Hours / Schedule
-The automated schedule is defined in [`.github/workflows/attendance.yml`](.github/workflows/attendance.yml).
-GitHub Actions uses **UTC** time. Convert your local hours to UTC:
+### Step 4: Your Configured Schedule (IST)
+The schedule is defined in [`.github/workflows/attendance.yml`](.github/workflows/attendance.yml).
+It is pre-configured for your working hours (**Monday to Saturday**):
 
-> **Example for India Standard Time (IST = UTC + 5:30):**
-> - **Morning Check-In at 9:00 AM IST**: `30 3 * * 1-5` (03:30 UTC, Mon–Fri)
-> - **Evening Check-Out at 6:00 PM IST**: `30 12 * * 1-5` (12:30 UTC, Mon–Fri)
+| Action | Local Time (IST) | Cloud Runner Time (UTC) | Cron Expression |
+|---|---|---|---|
+| **Morning Check-In** | **09:30 AM IST** | 04:00 AM UTC | `0 4 * * 1-6` |
+| **Evening Check-Out** | **06:30 PM IST** | 01:00 PM UTC | `0 13 * * 1-6` |
 
-To change the time, edit lines 10 & 15 of `.github/workflows/attendance.yml`.
+*Note: The bot adds a randomized 0–10 minute human jitter so your check-in happens naturally between 9:30 AM – 9:40 AM and check-out between 6:30 PM – 6:40 PM.*
 
 ---
 
