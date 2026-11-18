@@ -1,0 +1,103 @@
+name: Attendance Automation
+
+on:
+  schedule:
+    # GitHub Actions cron schedules run in UTC time.
+    # User Timezone: IST (UTC + 05:30)
+    #
+    # Morning Check-In:
+    # 03:30 UTC = 09:00 AM IST (Monday to Friday)
+    # The script applies a random jitter (0-10 min) to punch in naturally.
+    - cron: '30 3 * * 1-5'
+
+    # Evening Check-Out:
+    # 12:30 UTC = 06:00 PM IST (Monday to Friday)
+    # The script applies a random jitter (0-10 min) to punch out naturally.
+    - cron: '30 12 * * 1-5'
+
+  # Allows manual 1-click execution from GitHub Actions tab
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to run'
+        required: true
+        default: 'checkin'
+        type: choice
+        options:
+          - checkin
+          - checkout
+          - status
+      skip_jitter:
+        description: 'Skip random jitter delay (immediate run)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  attendance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install --with-deps chromium
+
+      - name: Determine Action (Check-in vs Check-out)
+        id: determine_action
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
+            if [ "${{ github.event.inputs.skip_jitter }}" = "true" ]; then
+              echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
+            else
+              echo "JITTER_FLAG=" >> $GITHUB_ENV
+            fi
+          else
+            # Automated cron schedule: determine by UTC hour
+            # Hour 3 UTC (09:00 AM IST) -> checkin
+            # Hour 12 UTC (06:00 PM IST) -> checkout
+            CURRENT_HOUR=$(date -u +%H)
+            if [ "$CURRENT_HOUR" -lt 8 ]; then
+              echo "ACTION=checkin" >> $GITHUB_ENV
+            else
+              echo "ACTION=checkout" >> $GITHUB_ENV
+            fi
+            echo "JITTER_FLAG=" >> $GITHUB_ENV
+          fi
+
+      - name: Run Attendance Bot
+        env:
+          PORTAL_URL: ${{ secrets.PORTAL_URL }}
+          PORTAL_USERNAME: ${{ secrets.PORTAL_USERNAME }}
+          PORTAL_PASSWORD: ${{ secrets.PORTAL_PASSWORD }}
+          USERNAME_SELECTOR: ${{ secrets.USERNAME_SELECTOR }}
+          PASSWORD_SELECTOR: ${{ secrets.PASSWORD_SELECTOR }}
+          LOGIN_SUBMIT_SELECTOR: ${{ secrets.LOGIN_SUBMIT_SELECTOR }}
+          CHECKIN_SELECTOR: ${{ secrets.CHECKIN_SELECTOR }}
+          CHECKOUT_SELECTOR: ${{ secrets.CHECKOUT_SELECTOR }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          MAX_JITTER_SECONDS: '600'
+          HEADLESS: 'True'
+        run: |
+          python checkin_bot.py --action ${{ env.ACTION }} ${{ env.JITTER_FLAG }}
+
+      - name: Upload Screenshot Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attendance-screenshot-${{ env.ACTION }}-${{ github.run_id }}
+          path: attendance_result.png
+          retention-days: 7
