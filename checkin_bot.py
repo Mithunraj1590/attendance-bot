@@ -152,6 +152,8 @@ def run_attendance(action: str, no_jitter: bool = False):
             viewport={"width": 1440, "height": 900},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             timezone_id="Asia/Kolkata",
+            permissions=["geolocation"],
+            geolocation={"latitude": 12.9716, "longitude": 77.5946},
         )
 
         page = context.new_page()
@@ -213,19 +215,43 @@ def run_attendance(action: str, no_jitter: bool = False):
             page.wait_for_load_state("networkidle", timeout=30000)
             page.wait_for_timeout(5000)
 
+            # Dismiss any announcement or welcome modal if present
+            for close_sel in ['button[aria-label="Close"]', 'button:has-text("Remind me later")', 'button:has-text("Dismiss")', '.close', 'button:has-text("Later")']:
+                try:
+                    if page.locator(close_sel).first.is_visible(timeout=1000):
+                        page.locator(close_sel).first.click()
+                        page.wait_for_timeout(1000)
+                except Exception:
+                    pass
+
             # --- STEP 2: CHECKIN / CHECKOUT ACTION ---
             if action.lower() == "checkin":
                 action_name = "Check-in"
                 candidates = [
                     'button:has-text("Web Check In")',
                     'button:has-text("Web Check-in")',
+                    'button:has-text("Web Clock In")',
+                    'button:has-text("Web Clock-in")',
                     'button:has-text("Check In")',
                     'button:has-text("Check-in")',
+                    'button:has-text("Checkin")',
                     'button:has-text("Clock In")',
+                    'button:has-text("Clock-in")',
                     'button:has-text("Punch In")',
+                    'button:has-text("Punch-in")',
+                    'button:has-text("Mark Attendance")',
                     'a:has-text("Web Check In")',
                     'a:has-text("Check In")',
+                    'a:has-text("Clock In")',
                     'div[role="button"]:has-text("Check In")',
+                    'div[role="button"]:has-text("Clock In")',
+                    'span:has-text("Web Check In")',
+                    'span:has-text("Web Check-In")',
+                    'span:has-text("Check In")',
+                    '[aria-label*="Check In" i]',
+                    '[aria-label*="Clock In" i]',
+                    '[title*="Check In" i]',
+                    '[title*="Clock In" i]',
                 ]
                 selector = CHECKIN_SELECTOR
             elif action.lower() == "checkout":
@@ -233,13 +259,27 @@ def run_attendance(action: str, no_jitter: bool = False):
                 candidates = [
                     'button:has-text("Web Check Out")',
                     'button:has-text("Web Check-out")',
+                    'button:has-text("Web Clock Out")',
+                    'button:has-text("Web Clock-out")',
                     'button:has-text("Check Out")',
                     'button:has-text("Check-out")',
+                    'button:has-text("Checkout")',
                     'button:has-text("Clock Out")',
+                    'button:has-text("Clock-out")',
                     'button:has-text("Punch Out")',
+                    'button:has-text("Punch-out")',
                     'a:has-text("Web Check Out")',
                     'a:has-text("Check Out")',
+                    'a:has-text("Clock Out")',
                     'div[role="button"]:has-text("Check Out")',
+                    'div[role="button"]:has-text("Clock Out")',
+                    'span:has-text("Web Check Out")',
+                    'span:has-text("Web Check-Out")',
+                    'span:has-text("Check Out")',
+                    '[aria-label*="Check Out" i]',
+                    '[aria-label*="Clock Out" i]',
+                    '[title*="Check Out" i]',
+                    '[title*="Clock Out" i]',
                 ]
                 selector = CHECKOUT_SELECTOR
             elif action.lower() == "status":
@@ -263,12 +303,13 @@ def run_attendance(action: str, no_jitter: bool = False):
                         'button:has-text("Yes")',
                         'button:has-text("OK")',
                         'button:has-text("Submit")',
+                        'button:has-text("Proceed")',
                     ]
                     find_and_click(page, "", confirm_candidates, "Modal Confirmation", timeout_ms=3000)
                     page.wait_for_timeout(3000)
                 else:
                     print(f"[!] Warning: Could not find or click {action_name} button with default selectors.")
-                    print("[!] If your portal uses a specific button ID/class, set CHECKIN_SELECTOR / CHECKOUT_SELECTOR.")
+                    raise RuntimeError(f"Could not find or click the {action_name} button. The portal may use a custom button selector or require navigating to an Attendance section. Please check the screenshot artifact.")
 
             # Capture screenshot as proof
             page.screenshot(path=screenshot_path, full_page=False)
