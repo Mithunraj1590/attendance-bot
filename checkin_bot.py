@@ -164,56 +164,74 @@ def run_attendance(action: str, no_jitter: bool = False):
             page.wait_for_timeout(3000)
 
             # --- STEP 1: LOGIN ---
-            print("[*] Attempting login...")
-            username_candidates = [
-                'input[type="email"]',
-                'input[name*="user" i]',
-                'input[name*="email" i]',
-                'input[id*="user" i]',
-                'input[id*="email" i]',
-                'input[placeholder*="email" i]',
-                'input[placeholder*="username" i]',
-                'input[type="text"]',
-            ]
-            password_candidates = [
-                'input[type="password"]',
-                'input[name*="pass" i]',
-                'input[id*="pass" i]',
-            ]
-            submit_candidates = [
-                'button[type="submit"]',
-                'input[type="submit"]',
-                'button:has-text("Sign In")',
-                'button:has-text("Log In")',
-                'button:has-text("Login")',
-                'button:has-text("Submit")',
-                'button:has-text("Next")',
-            ]
+            # First check if already logged in / on dashboard
+            dashboard_indicator = page.locator('text=/Good morning|Check in|Check out|Apps|OpsHub/i')
+            if dashboard_indicator.count() > 0 and dashboard_indicator.first.is_visible():
+                print("[+] Already logged into dashboard!")
+            else:
+                print("[*] Attempting login...")
+                username_candidates = [
+                    'input[type="email"]',
+                    'input[name*="user" i]',
+                    'input[name*="login" i]',
+                    'input[name*="email" i]',
+                    'input[id*="user" i]',
+                    'input[id*="login" i]',
+                    'input[id*="email" i]',
+                    'input[placeholder*="email" i]',
+                    'input[placeholder*="username" i]',
+                    'input[type="text"]',
+                ]
+                password_candidates = [
+                    'input[type="password"]',
+                    'input[name*="pass" i]',
+                    'input[id*="pass" i]',
+                ]
+                submit_candidates = [
+                    'button:has-text("Sign In")',
+                    'button:has-text("Sign in")',
+                    'button:has-text("Log In")',
+                    'button:has-text("Login")',
+                    'button[type="submit"]',
+                    'input[type="submit"]',
+                ]
 
-            user_filled = find_and_fill(page, USERNAME_SELECTOR, username_candidates, PORTAL_USERNAME, "Username/Email")
-            if not user_filled:
-                raise RuntimeError("Could not find Username/Email input field.")
+                user_filled = find_and_fill(page, USERNAME_SELECTOR, username_candidates, PORTAL_USERNAME, "Username/Email")
+                if not user_filled:
+                    raise RuntimeError("Could not find Username/Email input field.")
 
-            # Some modern portals have a 2-step login (First enter email, click Next, then password)
-            if not page.locator('input[type="password"]').is_visible():
-                print("[*] Password field not yet visible, checking for 'Next' button...")
-                find_and_click(page, LOGIN_SUBMIT_SELECTOR, submit_candidates, "Next", timeout_ms=3000)
-                page.wait_for_timeout(2000)
+                # Check if password field is visible; if not, look for Next
+                if not page.locator('input[type="password"]').is_visible():
+                    print("[*] Password field not yet visible, checking for 'Next' button...")
+                    find_and_click(page, LOGIN_SUBMIT_SELECTOR, submit_candidates, "Next", timeout_ms=3000)
+                    page.wait_for_timeout(2000)
 
-            pass_filled = find_and_fill(page, PASSWORD_SELECTOR, password_candidates, PORTAL_PASSWORD, "Password")
-            if not pass_filled:
-                raise RuntimeError("Could not find Password input field.")
+                pass_filled = find_and_fill(page, PASSWORD_SELECTOR, password_candidates, PORTAL_PASSWORD, "Password")
+                if not pass_filled:
+                    raise RuntimeError("Could not find Password input field.")
 
-            login_clicked = find_and_click(page, LOGIN_SUBMIT_SELECTOR, submit_candidates, "Login Submit")
-            if not login_clicked:
-                # Press Enter as fallback
-                page.keyboard.press("Enter")
-                print("[*] Pressed Enter key to submit login.")
+                # Auto-check 'Keep me signed in' if present
+                try:
+                    keep_in = page.locator('input[type="checkbox"]').first
+                    if keep_in.is_visible(timeout=1000) and not keep_in.is_checked():
+                        keep_in.check()
+                        print("[+] Checked 'Keep me signed in'")
+                except Exception:
+                    pass
 
-            # Wait for dashboard / post-login page load
-            print("[*] Waiting for dashboard navigation...")
-            page.wait_for_load_state("networkidle", timeout=30000)
-            page.wait_for_timeout(5000)
+                login_clicked = find_and_click(page, LOGIN_SUBMIT_SELECTOR, submit_candidates, "Sign In Submit")
+                if not login_clicked:
+                    page.keyboard.press("Enter")
+                    print("[*] Pressed Enter key to submit login.")
+
+                # Wait for dashboard to appear
+                print("[*] Waiting for OpsHub dashboard...")
+                try:
+                    page.wait_for_selector('text=/Good morning|Check in|Check out|Apps|OpsHub/i', timeout=25000)
+                    print("[+] Dashboard loaded successfully!")
+                except Exception as e:
+                    print(f"[*] Dashboard selector note: {e}")
+                page.wait_for_timeout(4000)
 
             # Dismiss any announcement or welcome modal if present
             for close_sel in ['button[aria-label="Close"]', 'button:has-text("Remind me later")', 'button:has-text("Dismiss")', '.close', 'button:has-text("Later")']:
@@ -225,91 +243,71 @@ def run_attendance(action: str, no_jitter: bool = False):
                     pass
 
             # --- STEP 2: CHECKIN / CHECKOUT ACTION ---
-            if action.lower() == "checkin":
-                action_name = "Check-in"
-                candidates = [
-                    'button:has-text("Web Check In")',
-                    'button:has-text("Web Check-in")',
-                    'button:has-text("Web Clock In")',
-                    'button:has-text("Web Clock-in")',
-                    'button:has-text("Check In")',
-                    'button:has-text("Check-in")',
-                    'button:has-text("Checkin")',
-                    'button:has-text("Clock In")',
-                    'button:has-text("Clock-in")',
-                    'button:has-text("Punch In")',
-                    'button:has-text("Punch-in")',
-                    'button:has-text("Mark Attendance")',
-                    'a:has-text("Web Check In")',
-                    'a:has-text("Check In")',
-                    'a:has-text("Clock In")',
-                    'div[role="button"]:has-text("Check In")',
-                    'div[role="button"]:has-text("Clock In")',
-                    'span:has-text("Web Check In")',
-                    'span:has-text("Web Check-In")',
-                    'span:has-text("Check In")',
-                    '[aria-label*="Check In" i]',
-                    '[aria-label*="Clock In" i]',
-                    '[title*="Check In" i]',
-                    '[title*="Clock In" i]',
-                ]
-                selector = CHECKIN_SELECTOR
-            elif action.lower() == "checkout":
-                action_name = "Check-out"
-                candidates = [
-                    'button:has-text("Web Check Out")',
-                    'button:has-text("Web Check-out")',
-                    'button:has-text("Web Clock Out")',
-                    'button:has-text("Web Clock-out")',
-                    'button:has-text("Check Out")',
-                    'button:has-text("Check-out")',
-                    'button:has-text("Checkout")',
-                    'button:has-text("Clock Out")',
-                    'button:has-text("Clock-out")',
-                    'button:has-text("Punch Out")',
-                    'button:has-text("Punch-out")',
-                    'a:has-text("Web Check Out")',
-                    'a:has-text("Check Out")',
-                    'a:has-text("Clock Out")',
-                    'div[role="button"]:has-text("Check Out")',
-                    'div[role="button"]:has-text("Clock Out")',
-                    'span:has-text("Web Check Out")',
-                    'span:has-text("Web Check-Out")',
-                    'span:has-text("Check Out")',
-                    '[aria-label*="Check Out" i]',
-                    '[aria-label*="Clock Out" i]',
-                    '[title*="Check Out" i]',
-                    '[title*="Clock Out" i]',
-                ]
-                selector = CHECKOUT_SELECTOR
-            elif action.lower() == "status":
-                action_name = "Status Check"
-                candidates = []
-                selector = None
+            if action.lower() == "status":
+                print("[*] Status check completed. No button clicked.")
             else:
-                raise ValueError(f"Unknown action: {action}. Use 'checkin' or 'checkout'.")
+                target_text = "Check in" if action.lower() == "checkin" else "Check out"
+                opposite_text = "Check out" if action.lower() == "checkin" else "Check in"
+                custom_sel = CHECKIN_SELECTOR if action.lower() == "checkin" else CHECKOUT_SELECTOR
 
-            if selector or candidates:
-                print(f"[*] Looking for {action_name} button...")
-                action_clicked = find_and_click(page, selector, candidates, action_name, timeout_ms=8000)
+                print(f"[*] Looking for '{target_text}' action...")
 
-                if action_clicked:
-                    print(f"[✓] {action_name} button clicked successfully.")
-                    page.wait_for_timeout(3000)
-
-                    # Look for modal confirm button (e.g. "Confirm", "Yes", "OK") if a popup appears
-                    confirm_candidates = [
-                        'button:has-text("Confirm")',
-                        'button:has-text("Yes")',
-                        'button:has-text("OK")',
-                        'button:has-text("Submit")',
-                        'button:has-text("Proceed")',
-                    ]
-                    find_and_click(page, "", confirm_candidates, "Modal Confirmation", timeout_ms=3000)
-                    page.wait_for_timeout(3000)
+                # First check if custom selector provided
+                if custom_sel:
+                    clicked = find_and_click(page, custom_sel, [], target_text, timeout_ms=8000)
+                    if not clicked:
+                        raise RuntimeError(f"Could not click custom selector '{custom_sel}'.")
                 else:
-                    print(f"[!] Warning: Could not find or click {action_name} button with default selectors.")
-                    raise RuntimeError(f"Could not find or click the {action_name} button. The portal may use a custom button selector or require navigating to an Attendance section. Please check the screenshot artifact.")
+                    # Look for OpsHub center button or header button
+                    # Check if already in desired state (e.g. checkin requested but only checkout exists)
+                    target_btn = page.locator(f'button:has-text("{target_text}"), a:has-text("{target_text}"), [role="button"]:has-text("{target_text}")')
+                    opposite_btn = page.locator(f'button:has-text("{opposite_text}"), a:has-text("{opposite_text}"), [role="button"]:has-text("{opposite_text}")')
+
+                    t_count = target_btn.count()
+                    o_count = opposite_btn.count()
+                    print(f"[*] Found {t_count} '{target_text}' button(s) and {o_count} '{opposite_text}' button(s).")
+
+                    if t_count == 0 and o_count > 0:
+                        print(f"[✓] You are ALREADY in the correct state! '{opposite_text}' is currently active.")
+                    elif t_count == 0:
+                        # Fallback to broader text match
+                        broad_target = page.locator(f'text="{target_text}"')
+                        if broad_target.count() > 0:
+                            print(f"[+] Found text '{target_text}'. Clicking...")
+                            broad_target.first.click(timeout=5000)
+                        else:
+                            raise RuntimeError(f"Could not find '{target_text}' button on dashboard. Please check screenshot.")
+                    else:
+                        # Prioritize visible button (prefer center button if multiple)
+                        clicked = False
+                        for idx in reversed(range(t_count)):
+                            btn = target_btn.nth(idx)
+                            try:
+                                if btn.is_visible(timeout=2000):
+                                    btn.scroll_into_view_if_needed()
+                                    btn.click(timeout=5000)
+                                    print(f"[✓] Successfully clicked '{target_text}' button (element #{idx+1}).")
+                                    clicked = True
+                                    page.wait_for_timeout(3000)
+                                    break
+                            except Exception as err:
+                                print(f"[!] Could not click candidate #{idx+1}: {err}")
+
+                        if not clicked:
+                            # Force click first match
+                            target_btn.first.click(force=True, timeout=5000)
+                            print(f"[✓] Force-clicked '{target_text}' button.")
+                            page.wait_for_timeout(3000)
+
+                # Look for modal confirm button (e.g. "Confirm", "Yes", "OK") if a popup appears
+                confirm_candidates = [
+                    'button:has-text("Confirm")',
+                    'button:has-text("Yes")',
+                    'button:has-text("OK")',
+                    'button:has-text("Proceed")',
+                ]
+                find_and_click(page, "", confirm_candidates, "Modal Confirmation", timeout_ms=3000)
+                page.wait_for_timeout(2000)
 
             # Capture screenshot as proof
             page.screenshot(path=screenshot_path, full_page=False)
