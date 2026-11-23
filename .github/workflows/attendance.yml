@@ -1,19 +1,10 @@
 name: Attendance Automation
 
 on:
-  schedule:
-    # GitHub Actions cron schedules run in UTC time.
-    # User Timezone: IST (UTC + 05:30)
-    #
-    # Morning Check-In:
-    # 03:55 UTC = 09:25 AM IST (Monday to Saturday)
-    # Scheduled 5 mins before 9:30 to avoid top-of-hour GitHub queue delays and punch in right on time.
-    - cron: '55 3 * * 1-6'
-
-    # Evening Check-Out:
-    # 13:00 UTC = 06:30 PM IST (Monday to Saturday)
-    # Applies human jitter delay to punch out naturally around 6:30 PM - 6:40 PM IST.
-    - cron: '0 13 * * 1-6'
+  # Trigger automatically when pushed to main so we can test immediately
+  push:
+    branches:
+      - main
 
   # Allows manual 1-click execution from GitHub Actions tab
   workflow_dispatch:
@@ -27,11 +18,15 @@ on:
           - checkin
           - checkout
           - status
-      skip_jitter:
-        description: 'Skip random jitter delay (immediate run)'
-        required: false
-        default: true
-        type: boolean
+
+  schedule:
+    # Morning Check-In:
+    # 03:55 UTC = 09:25 AM IST (Monday to Saturday)
+    - cron: '55 3 * * 1-6'
+
+    # Evening Check-Out:
+    # 13:00 UTC = 06:30 PM IST (Monday to Saturday)
+    - cron: '0 13 * * 1-6'
 
 jobs:
   attendance:
@@ -59,15 +54,12 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
-            if [ "${{ github.event.inputs.skip_jitter }}" = "true" ]; then
-              echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
-            else
-              echo "JITTER_FLAG=" >> $GITHUB_ENV
-            fi
+            echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            echo "ACTION=checkin" >> $GITHUB_ENV
+            echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
           else
             # Automated cron schedule: determine by UTC hour
-            # Hour 3 UTC (09:00 AM IST) -> checkin
-            # Hour 12 UTC (06:00 PM IST) -> checkout
             CURRENT_HOUR=$(date -u +%H)
             if [ "$CURRENT_HOUR" -lt 8 ]; then
               echo "ACTION=checkin" >> $GITHUB_ENV
