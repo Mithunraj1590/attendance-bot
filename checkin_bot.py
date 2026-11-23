@@ -160,16 +160,22 @@ def run_attendance(action: str, no_jitter: bool = False):
 
         try:
             print(f"[*] Navigating to {PORTAL_URL}...")
-            page.goto(PORTAL_URL, wait_until="networkidle", timeout=45000)
+            page.goto(PORTAL_URL, wait_until="domcontentloaded", timeout=45000)
             page.wait_for_timeout(3000)
 
             # --- STEP 1: LOGIN ---
-            # First check if already logged in / on dashboard
-            dashboard_indicator = page.locator('text=/Good morning|Check in|Check out|Apps|OpsHub/i')
-            if dashboard_indicator.count() > 0 and dashboard_indicator.first.is_visible():
-                print("[+] Already logged into dashboard!")
-            else:
-                print("[*] Attempting login...")
+            # Check if login form is present on the page
+            login_form_present = False
+            for sel in ['input[type="password"]', 'input[type="email"]', 'text="Sign in to your workspace"', 'button:has-text("Sign In")']:
+                try:
+                    if page.locator(sel).first.is_visible(timeout=2000):
+                        login_form_present = True
+                        break
+                except Exception:
+                    pass
+
+            if login_form_present:
+                print("[*] Login page detected. Entering credentials...")
                 username_candidates = [
                     'input[type="email"]',
                     'input[name*="user" i]',
@@ -225,13 +231,15 @@ def run_attendance(action: str, no_jitter: bool = False):
                     print("[*] Pressed Enter key to submit login.")
 
                 # Wait for dashboard to appear
-                print("[*] Waiting for OpsHub dashboard...")
+                print("[*] Waiting for OpsHub dashboard to load...")
                 try:
-                    page.wait_for_selector('text=/Good morning|Check in|Check out|Apps|OpsHub/i', timeout=25000)
+                    page.wait_for_selector('text=/Good morning|Check in|Check out/i', timeout=25000)
                     print("[+] Dashboard loaded successfully!")
                 except Exception as e:
-                    print(f"[*] Dashboard selector note: {e}")
+                    print(f"[*] Dashboard selector wait note: {e}")
                 page.wait_for_timeout(4000)
+            else:
+                print("[+] Already logged into dashboard (no login form present).")
 
             # Dismiss any announcement or welcome modal if present
             for close_sel in ['button[aria-label="Close"]', 'button:has-text("Remind me later")', 'button:has-text("Dismiss")', '.close', 'button:has-text("Later")']:
