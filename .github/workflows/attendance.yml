@@ -25,8 +25,9 @@ on:
     - cron: '55 3 * * 1-6'
 
     # Evening Check-Out:
-    # 13:00 UTC = 06:30 PM IST (Monday to Saturday)
-    - cron: '0 13 * * 1-6'
+    # 13:05 UTC = 06:35 PM IST (Monday to Saturday)
+    # Scheduled at :05 to avoid GitHub's top-of-hour (:00) global runner queue delay
+    - cron: '5 13 * * 1-6'
 
 jobs:
   attendance:

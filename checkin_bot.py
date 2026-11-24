@@ -267,21 +267,33 @@ def run_attendance(action: str, no_jitter: bool = False):
                         raise RuntimeError(f"Could not click custom selector '{custom_sel}'.")
                 else:
                     # Look for OpsHub center button or header button
-                    # Check if already in desired state (e.g. checkin requested but only checkout exists)
-                    target_btn = page.locator(f'button:has-text("{target_text}"), a:has-text("{target_text}"), [role="button"]:has-text("{target_text}")')
-                    opposite_btn = page.locator(f'button:has-text("{opposite_text}"), a:has-text("{opposite_text}"), [role="button"]:has-text("{opposite_text}")')
+                    # Support multiple variations (Check in/Check-in, Check out/Check-out, Clock in/out)
+                    if action.lower() == "checkin":
+                        target_patterns = ['Check in', 'Check-in', 'Check In', 'Clock in', 'Punch in']
+                        opposite_patterns = ['Check out', 'Check-out', 'Check Out', 'Clock out', 'Punch out']
+                    else:
+                        target_patterns = ['Check out', 'Check-out', 'Check Out', 'Clock out', 'Punch out']
+                        opposite_patterns = ['Check in', 'Check-in', 'Check In', 'Clock in', 'Punch in']
+
+                    target_selectors = ", ".join([f'button:has-text("{p}"), a:has-text("{p}"), [role="button"]:has-text("{p}")' for p in target_patterns])
+                    opposite_selectors = ", ".join([f'button:has-text("{p}"), a:has-text("{p}"), [role="button"]:has-text("{p}")' for p in opposite_patterns])
+
+                    target_btn = page.locator(target_selectors)
+                    opposite_btn = page.locator(opposite_selectors)
 
                     t_count = target_btn.count()
                     o_count = opposite_btn.count()
                     print(f"[*] Found {t_count} '{target_text}' button(s) and {o_count} '{opposite_text}' button(s).")
 
                     if t_count == 0 and o_count > 0:
-                        print(f"[✓] You are ALREADY in the correct state! '{opposite_text}' is currently active.")
+                        print(f"[✓] You are ALREADY in the correct state! '{opposite_patterns[0]}' is currently showing on dashboard.")
                     elif t_count == 0:
-                        # Fallback to broader text match
-                        broad_target = page.locator(f'text="{target_text}"')
+                        # Fallback to broader case-insensitive regex
+                        import re
+                        regex_pat = re.compile(r'check\s*in' if action.lower() == 'checkin' else r'check\s*out', re.I)
+                        broad_target = page.locator(f'text={regex_pat}')
                         if broad_target.count() > 0:
-                            print(f"[+] Found text '{target_text}'. Clicking...")
+                            print(f"[+] Found regex match for '{target_text}'. Clicking...")
                             broad_target.first.click(timeout=5000)
                         else:
                             raise RuntimeError(f"Could not find '{target_text}' button on dashboard. Please check screenshot.")
