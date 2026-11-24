@@ -1,11 +1,6 @@
 name: Attendance Automation
 
 on:
-  # Trigger automatically when pushed to main so we can test immediately
-  push:
-    branches:
-      - main
-
   # Allows manual 1-click execution from GitHub Actions tab
   workflow_dispatch:
     inputs:
@@ -55,9 +50,6 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "ACTION=${{ github.event.inputs.action }}" >> $GITHUB_ENV
-            echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
-          elif [ "${{ github.event_name }}" = "push" ]; then
-            echo "ACTION=checkin" >> $GITHUB_ENV
             echo "JITTER_FLAG=--no-jitter" >> $GITHUB_ENV
           else
             # Automated cron schedule: determine by UTC hour
